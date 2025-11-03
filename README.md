@@ -28,7 +28,7 @@ This is the backend for the JavaTech social media application. It provides REST 
 ## Setup Instructions
 1. Clone the repo:
 ```bash
-git clone https://github.com/yourusername/Sociolizer-backend.git
+git clone https://github.com/Wassim-php/Sociolizer-backend.git
 ```
 
 2. Configure database in src/main/resources/application.properties:
