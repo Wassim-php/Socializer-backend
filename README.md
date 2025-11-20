@@ -69,9 +69,6 @@ jwt.secret=<your-base64-256bit-secret>
 jwt.expiration=86400000
 ```
 
-Notes:
-- It's recommended to supply a secure 256-bit base64-encoded secret for `jwt.secret` in production.
-- You can override properties with environment variables when deploying.
 
 4. Build and run the app:
 
