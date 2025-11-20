@@ -3,6 +3,8 @@ package com.example.javatech.post.service;
 import com.example.javatech.comment.Comment;
 import com.example.javatech.comment.CommentRepository;
 import com.example.javatech.comment.dto.CommentCreateDTO;
+import com.example.javatech.global.exception.ResourceNotFoundException;
+import com.example.javatech.global.exception.UnauthorizedActionException;
 import com.example.javatech.global.response.ApiResponse;
 import com.example.javatech.post.Post;
 import com.example.javatech.post.PostRepository;
@@ -15,11 +17,13 @@ import com.example.javatech.user.service.UserServiceImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
 public class PostServiceImpl implements PostService {
+
     @Autowired
     private PostRepository postRepository;
 
@@ -39,14 +43,11 @@ public class PostServiceImpl implements PostService {
         dto.setImageUrl(post.getImageUrl());
         dto.setCreatedAt(post.getCreatedAt());
 
-        // map relations safely
-        if (post.getUser() != null) {
+        if (post.getUser() != null)
             dto.setUserId(post.getUser().getId());
-        }
 
-        if (post.getTag() != null) {
+        if (post.getTag() != null)
             dto.setTagId(post.getTag().getId());
-        }
 
         if (post.getComments() != null) {
             dto.setCommentIds(
@@ -67,7 +68,6 @@ public class PostServiceImpl implements PostService {
         }
 
         return dto;
-
     }
 
     @Override
@@ -76,41 +76,54 @@ public class PostServiceImpl implements PostService {
 
         Post post = new Post();
         post.setContent(postCreateDTO.getContent());
-        post.setCreatedAt(post.getCreatedAt());
-        post.setUser(user);
         post.setImageUrl(postCreateDTO.getImageUrl());
-        post.setTag(tagService.mapFrom(tagService.getById(postCreateDTO.getTagId()).getData()));
-        PostDTO postDTO = mapTo(postRepository.save(post));
-        return new ApiResponse<>("Post has been created successfully!", postDTO, true);
+        post.setCreatedAt(LocalDateTime.now());
+        post.setUser(user);
 
+        post.setTag(
+                tagService.mapFrom(
+                        tagService.getById(postCreateDTO.getTagId()).getData()
+                )
+        );
+
+        PostDTO dto = mapTo(postRepository.save(post));
+        return new ApiResponse<>("Post has been created successfully!", dto, true);
     }
 
     @Override
     public ApiResponse<List<PostDTO>> getAll(){
-        List<Post> posts = postRepository.findAll().stream().toList();
-        List<PostDTO> postDTOs = posts.stream().map(post -> mapTo(post)).collect(Collectors.toList());
-        return new ApiResponse<>("Posts has been fetched successfully!", postDTOs, true);
+        List<PostDTO> posts = postRepository.findAll()
+                .stream().map(this::mapTo)
+                .collect(Collectors.toList());
 
+        return new ApiResponse<>("Posts fetched successfully!", posts, true);
     }
 
     @Override
     public ApiResponse<PostDTO> getById(Long id){
         Post post = postRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Post with id "+ id+ " not found!"));
-        PostDTO postDTO = mapTo(post);
-        return new ApiResponse<>("Post has been fetched successfully!", postDTO, true);
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Post with id " + id + " not found"));
 
+        return new ApiResponse<>("Post fetched successfully!", mapTo(post), true);
     }
 
     @Override
     public ApiResponse<PostDTO> update(Long id, PostUpdateDTO postUpdateDTO){
         Post post = postRepository.findById(id)
-                        .orElseThrow(() -> new RuntimeException("Post with id "+ id+ " not found!"));
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Post with id " + id + " not found"));
+
         post.setContent(postUpdateDTO.getContent());
         post.setImageUrl(postUpdateDTO.getImageUrl());
-        post.setTag(tagService.mapFrom(tagService.getById(postUpdateDTO.getTagId()).getData()));
-        PostDTO postDTO = mapTo(postRepository.save(post));
-        return new ApiResponse<>("Post has been successfully updated!", postDTO, true);
+        post.setTag(
+                tagService.mapFrom(
+                        tagService.getById(postUpdateDTO.getTagId()).getData()
+                )
+        );
+
+        PostDTO dto = mapTo(postRepository.save(post));
+        return new ApiResponse<>("Post updated successfully!", dto, true);
     }
 
     @Override
@@ -118,51 +131,61 @@ public class PostServiceImpl implements PostService {
         User user = userService.getCurrentUser();
 
         Post post = postRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Post with id "+ id+ " not found!"));
-        if(post.getUser().getId().equals(user.getId())) {
-            postRepository.delete(post);
-            return new ApiResponse<>("Post has been deleted successfully!", null, true);
-        }else {
-            return new ApiResponse<>("Error, user not authorized to perform this action", null, false);
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Post with id " + id + " not found"));
+
+        if (!post.getUser().getId().equals(user.getId())) {
+            throw new UnauthorizedActionException("You are not allowed to delete this post");
         }
+
+        postRepository.delete(post);
+        return new ApiResponse<>("Post deleted successfully!", null, true);
     }
 
     @Override
     public ApiResponse<Void> likePost(Long id) {
         User user = userService.getCurrentUser();
+
         Post post = postRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Post with id "+ id+ " not found!"));
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Post with id " + id + " not found"));
 
         post.getLikedUsers().add(user);
         postRepository.save(post);
-        return new ApiResponse<>("Post has been liked successfully!", null, true);
 
+        return new ApiResponse<>("Post liked successfully!", null, true);
     }
 
     @Override
     public ApiResponse<Void> unlikePost(Long id) {
         User user = userService.getCurrentUser();
+
         Post post = postRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Post with id "+ id+ " not found!"));
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Post with id " + id + " not found"));
+
         post.getLikedUsers().remove(user);
         postRepository.save(post);
-        return new ApiResponse<>("Post has been unliked successfully!", null, true);
+
+        return new ApiResponse<>("Post unliked successfully!", null, true);
     }
 
     @Override
     public ApiResponse<Void> addComment(Long id, CommentCreateDTO commentCreateDTO) {
         User user = userService.getCurrentUser();
+
+        Post post = postRepository.findById(id)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Post with id " + id + " not found"));
+
         Comment comment = new Comment();
         comment.setContent(commentCreateDTO.getContent());
         comment.setCreatedAt(commentCreateDTO.getCreatedAt());
         comment.setUser(user);
-        Post post = postRepository.findById(id)
-                        .orElseThrow(() -> new RuntimeException("Post with id "+ id+ " not found!"));
         comment.setPost(post);
+
         commentRepository.save(comment);
 
         return new ApiResponse<>("Comment added successfully!", null, true);
-
     }
-
 }

@@ -1,6 +1,6 @@
 package com.example.javatech.user.service;
 
-
+import com.example.javatech.global.exception.ResourceNotFoundException;
 import com.example.javatech.global.response.ApiResponse;
 import com.example.javatech.user.User;
 import com.example.javatech.user.UserRepository;
@@ -27,6 +27,7 @@ public class UserServiceImpl implements UserService {
     public User getCurrentUser() {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         String username;
+
         if (principal instanceof UserDetails) {
             username = ((UserDetails) principal).getUsername();
         } else {
@@ -34,7 +35,7 @@ public class UserServiceImpl implements UserService {
         }
 
         return userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
     }
 
     public UserDTO mapTo(User user) {
@@ -56,33 +57,35 @@ public class UserServiceImpl implements UserService {
     @Override
     public ApiResponse<List<UserDTO>> getAll() {
         List<User> users = userRepository.findAll();
-        List<UserDTO> userDTOS = users.stream().map(user -> mapTo(user)).toList();
+        List<UserDTO> userDTOS = users.stream().map(this::mapTo).toList();
         return new ApiResponse<>("Users fetched successfully!", userDTOS, true);
-
     }
 
     @Override
     public ApiResponse<UserDTO> getById(Long id){
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-        UserDTO userDTO = mapTo(user);
-        return new ApiResponse<>("User fetched successfully!", userDTO, true);
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        return new ApiResponse<>("User fetched successfully!", mapTo(user), true);
     }
 
     @Override
     public ApiResponse<UserDTO> update(Long id, UserUpdateDTO userDTO){
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
         user.setUsername(userDTO.getUsername());
         user.setPassword(passwordEncoder.encode(userDTO.getPassword()));
+
         return new ApiResponse<>("User updated successfully!", mapTo(userRepository.save(user)), true);
     }
 
     @Override
     public ApiResponse<Void> delete(Long id){
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
         userRepository.delete(user);
+
         return new ApiResponse<>("User deleted successfully!", null, true);
     }
 
